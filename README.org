@@ -1,4 +1,4 @@
-#+title: Readme
+#+title: Some Rocket Based web APIs
 
 * Summary
 This is a collection of rust binaries that show how to use apis and web servers to retrieve data from an endpoint.
