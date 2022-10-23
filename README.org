@@ -22,21 +22,24 @@ cargo run --bin [binary_name]
 * List of Users
 Implements a simple crud api
 ** Endpoints
+*** GET requests
 - ~/users~
   + List all users
 - ~/add/user/<userid>/<username>~
   + Add a new user
   + This is a get request
 
-   The following example will add the user named ~"John"~ with a user id of ~20~
+   The following example will add the user named ~John~ with a user id of ~20~
     #+begin_src bash
 curl 127.0.0.1/add/user/20/John
     #+end_src
+*** POST requests
 - ~/add~
-  + Add a new user.
+  + Add a new user if the user id does not exists
+  + If the user id exists this will return a json with a message saying that user already exists
   + This is a post requiest that expect a ~content-type: application/json~ header
 
-    The following example will add the user ~"Martha"~ with the userid of ~134~
+    The following example will add the user ~Martha~ with the userid of ~134~
     #+begin_src bash
 curl -X POST -H 'content-type: application/json' -d '{"id": 134, "username": "Martha"}' http://127.0.0.1:8000/add
     #+end_src

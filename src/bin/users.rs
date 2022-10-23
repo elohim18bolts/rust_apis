@@ -38,6 +38,9 @@ async fn add_user<'r>(id: usize, username: &str, users: &'r State<Mutex<Vec<User
 #[rocket::post("/add", format = "json", data = "<message>")]
 async fn post_user<'r>(message: Json<User>, users: &'r State<Mutex<Vec<User>>>) -> Value {
     let mut users = users.lock().await;
+    if let Some(user) = users.iter().find(|u| u.id == message.id) {
+        return json!({"status": "error", "msg": format!("User with id {} already exists",user.id)});
+    }
     users.push(User {
         id: message.id,
         username: message.username.clone(),
@@ -52,8 +55,8 @@ fn not_found() -> Value {
     })
 }
 
-#[launch]
-fn root() -> _ {
+#[rocket::main]
+async fn main() -> Result<(), rocket::Error> {
     let mut users = vec![
         User {
             id: 1,
@@ -72,4 +75,7 @@ fn root() -> _ {
         .mount("/", routes![get_users, get_user, add_user, post_user])
         .register("/", catchers![not_found])
         .manage(Mutex::new(users))
+        .launch()
+        .await?;
+    Ok(())
 }
