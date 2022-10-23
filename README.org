@@ -25,14 +25,29 @@ Implements a simple crud api
 *** GET requests
 - ~/users~
   + List all users
-- ~/add/user/<userid>/<username>~
-  + Add a new user
-  + This is a get request
+- ~/user/<id>~
+    Request
+    ~GET /user/<id>~
 
-   The following example will add the user named ~John~ with a user id of ~20~
+    Response
+    ~content-type: application/json~
+
+    If the user with id ~<id>~ exists, then a json with the user id and username returned.
+
+    If the user with id ~<id>~ does not exists, then the json ~{status: error, msg: User not found}~ will be returned.
+
+    Example
     #+begin_src bash
-curl 127.0.0.1/add/user/20/John
+    curl http://127.0.0.1:8000/user/1
+    { id: 1, username: Peter }
     #+end_src
+
+    #+begin_src bash
+    curl http://127.0.0.1:8000/user/200
+    { "status": "error", "msg": "User not found"}
+    #+end_src
+
+
 *** POST requests
 - ~/add~
   + Add a new user if the user id does not exists
@@ -42,4 +57,63 @@ curl 127.0.0.1/add/user/20/John
     The following example will add the user ~Martha~ with the userid of ~134~
     #+begin_src bash
 curl -X POST -H 'content-type: application/json' -d '{"id": 134, "username": "Martha"}' http://127.0.0.1:8000/add
+    #+end_src
+
+- ~/remove~
+
+    Request
+
+    ~POST /remove~
+
+    ~data <userid>~
+
+    Response
+
+    ~content-type: application/json~
+
+    If the user with id ~<userid>~ exists, then the json ~{"status": "Ok", "msg": "User removed"}~ will be returned.
+
+    If the user with id ~<userid>~ does not exists, then the json ~{"status": "error", "msg": "User with id <userid> not found"}~ will be returned.
+
+    Example
+
+    #+begin_src bash
+    > curl http://127.0.0.1:8000/remove -X POST -H 'content-type: application/json' -d '1'
+    > {"status": "Ok", "msg": "User removed"}
+    #+end_src
+
+    #+begin_src bash
+    > curl http://127.0.0.1:8000/remove -X POST -H 'content-type: application/json' -d '200'
+    > { "status": "error", "msg": "User with id 200 not found"}
+    #+end_src
+
+- ~/update~
+
+    Endpoints
+
+    ~/update~
+
+    Request
+
+    ~POST /update~
+
+    ~data <{ "id": <userid: usize>, "username": <username_to_update: string> }>~
+
+    Response
+
+    ~content-type: application/json~
+
+    If the user with id ~<userid>~ exists, then the json ~{"id": <userid>, "username": <username_to_update>}~ will be returned. The user will also be updated with the new username.
+
+    If the user with id ~<userid>~ does not exists, then the json ~{"status": "error", "msg": "User  not found"}~ will be returned.
+
+    Example
+    #+begin_src bash
+    > curl http://127.0.0.1:8000/update -X POST -H 'content-type: application/json' -d '{"id": 1, username: "Someone Else"}'
+    > {"id": 1, "username": "Someone else"}
+    #+end_src
+
+    #+begin_src bash
+    > curl http://127.0.0.1:8000/update -X POST -H 'content-type: application/json' -d '{"id": 200, username: "Someone Else"}'
+    > { "status": "error", "msg": "User with id 200 not found"}
     #+end_src
