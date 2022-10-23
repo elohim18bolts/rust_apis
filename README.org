@@ -1,0 +1,42 @@
+#+title: Readme
+
+* Summary
+This is a collection of rust binaries that show how to use apis and web servers to retrieve data from an endpoint.
+
+* Binaries
+Run the command bellow to execute the binary:
+#+begin_src bash
+cargo run --bin [binary_name]
+#+end_src
+* Hello World
+** Endpoints
+- ~/hello~
+  + Get response with ~content-type: text/html~
+  + Display ~Hello World!!!~ string in the browser
+
+- ~/hello_json~
+  + Get response with ~content-type: application/json~
+  + Diplay ~{msg: "Hello World"}~
+    - Use the command ~curl http://127.0.0.1:8000/hello_json~ to see the response
+
+* List of Users
+Implements a simple crud api
+** Endpoints
+- ~/users~
+  + List all users
+- ~/add/user/<userid>/<username>~
+  + Add a new user
+  + This is a get request
+
+   The following example will add the user named ~"John"~ with a user id of ~20~
+    #+begin_src bash
+curl 127.0.0.1/add/user/20/John
+    #+end_src
+- ~/add~
+  + Add a new user.
+  + This is a post requiest that expect a ~content-type: application/json~ header
+
+    The following example will add the user ~"Martha"~ with the userid of ~134~
+    #+begin_src bash
+curl -X POST -H 'content-type: application/json' -d '{"id": 134, "username": "Martha"}' http://127.0.0.1:8000/add
+    #+end_src
