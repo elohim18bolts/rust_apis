@@ -30,17 +30,23 @@ mod basic_auth {
         password: Password,
     }
     impl User {
+        /// Creates a new `User` from a `username: &str` and a `password: &str`
         pub fn new(username: &str, password: &str) -> Self {
             Self {
                 username: Username::from(username),
                 password: Password::from(password),
             }
         }
+        /// Returns the `Users` username.
         pub fn get_name(&self) -> String {
             self.username.clone()
         }
     }
     impl From<[&str; 2]> for User {
+        /// **Arguments:** `pair: [&str; 2]`
+        /// The `pair.0` is the username & `pair.1` is the password.
+        /// # Returns
+        /// A `User` structure.
         fn from(pair: [&str; 2]) -> Self {
             Self {
                 username: pair[0].to_owned(),
@@ -49,11 +55,21 @@ mod basic_auth {
         }
     }
     impl Auth for User {
+        /// Encode the username and password.
+        /// # Returns:
+        /// A `String` with the `format`: `base64_encoded_username:base64_encoded_password`
         fn encode(&self) -> String {
             let username_encoded = base64::encode(&self.username);
             let password_encoded = base64::encode(&self.password);
             format!("{username_encoded}:{password_encoded}")
         }
+        /// Decode the authorization header.
+        /// # Arguments
+        /// `&str` -> Header from the request.
+        /// The header is in the form:
+        /// `&str` -> `Basic base64_encoded_username:base64_encoded_password`
+        /// # Returns
+        /// `Option<User>`
         fn decode(header: &str) -> Option<User> {
             //The header comes in the for Basic username_encoded:password_encoded
             let mut chunks = header.split_whitespace();
@@ -66,16 +82,10 @@ mod basic_auth {
                     if usr_pass.len() != 2 {
                         return None;
                     }
-                    let (username, password) =
-                        match (base64::decode(usr_pass[0]), base64::decode(usr_pass[1])) {
-                            (Ok(usr), Ok(pass)) => {
-                                match (String::from_utf8(usr), String::from_utf8(pass)) {
-                                    (Ok(u), Ok(p)) => (u.trim().to_string(), p.trim().to_string()),
-                                    _ => return None,
-                                }
-                            }
-                            _ => return None,
-                        };
+                    let (username, password) = (
+                        String::from_utf8(base64::decode(usr_pass[0]).ok()?).ok()?,
+                        String::from_utf8(base64::decode(usr_pass[1]).ok()?).ok()?,
+                    );
                     return Some(User::new(&username, &password));
                 }
                 None => return None,
@@ -85,29 +95,13 @@ mod basic_auth {
 }
 
 use basic_auth::{Auth, User};
-use rocket::request::{self, FromRequest, Outcome, Request};
+use rocket::request::{FromRequest, Outcome, Request};
 use rocket::serde::{json::Json, Deserialize, Serialize};
 use rocket::tokio::sync::Mutex;
 use rocket::{self, State};
 
-#[derive(Debug)]
-struct BasicAuthHeader<'r>(&'r str);
-#[rocket::async_trait]
-impl<'r> FromRequest<'r> for BasicAuthHeader<'r> {
-    type Error = Status;
-    async fn from_request(req: &'r Request<'_>) -> Outcome<Self, Self::Error> {
-        match req.headers().get_one("Authorization") {
-            Some(header) => {
-                println!("{:?}", header);
-                Outcome::Success(BasicAuthHeader(header))
-            }
-            None => Outcome::Failure((rocket::http::Status::BadRequest, Status::Error)),
-        }
-    }
-}
-
 #[derive(Deserialize, Serialize, Debug)]
-enum Status {
+pub enum Status {
     Ok,
     InvalidCredentials,
     Error,
@@ -120,47 +114,57 @@ struct Response<'r> {
     secret: Option<basic_auth::Secret>,
 }
 
-#[rocket::get("/")]
-async fn index<'r>(
-    header: BasicAuthHeader<'_>,
-    users: &'r State<Mutex<Vec<User>>>,
-) -> Json<Response<'r>> {
-    let users = users.lock().await;
-    if let Some(usr) = User::decode(&header.0) {
-        let user = users.iter().find(|u| u == &&usr);
-        match user {
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for User {
+    type Error = Status;
+    async fn from_request(req: &'r Request<'_>) -> Outcome<Self, Self::Error> {
+        let header = req.headers().get_one("Authorization");
+        if header.is_none() {
+            return Outcome::Failure((rocket::http::Status::Forbidden, Status::Error));
+        }
+        match User::decode(header.unwrap()) {
             Some(user) => {
-                println!("User: {:?}", user);
-                let resp = Response {
-                    status: Status::Ok,
-                    msg: Some("Amazing"),
-                    secret: Some(format!("This is a secret from {}", user.get_name())),
-                };
-                return Json(resp);
+                println!("{:?}", user);
+                Outcome::Success(user)
             }
-            None => {
-                let resp = Response {
-                    status: Status::InvalidCredentials,
-                    msg: None,
-                    secret: None,
-                };
-                return Json(resp);
-            }
+            None => Outcome::Failure((rocket::http::Status::NotFound, Status::Error)),
         }
     }
-    let resp = Response {
-        status: Status::Error,
-        msg: Some("Invalid or missing authorization header"),
-        secret: None,
-    };
-    Json(resp)
 }
 
-#[rocket::catch(400)]
-async fn bad_req<'r>() -> Json<Response<'r>> {
+#[rocket::get("/")]
+async fn index<'r>(header: User, users: &'r State<Mutex<Vec<User>>>) -> Json<Response<'r>> {
+    let users = users.lock().await;
+    if let Some(user) = users.iter().find(|u| u == &&header) {
+        let resp = Response {
+            status: Status::Ok,
+            msg: Some("Amazing"),
+            secret: Some(format!("This is a secret from {}", user.get_name())),
+        };
+        return Json(resp);
+    }
+
+    let resp = Response {
+        status: Status::InvalidCredentials,
+        msg: None,
+        secret: None,
+    };
+    return Json(resp);
+}
+
+#[rocket::catch(403)]
+async fn forbidden<'r>() -> Json<Response<'r>> {
     Json(Response {
         status: Status::Error,
-        msg: Some("Bad Request. Missing authorization header"),
+        msg: Some("Forbidden. Missing authorization header or bad header format"),
+        secret: None,
+    })
+}
+#[rocket::catch(404)]
+async fn not_found<'r>() -> Json<Response<'r>> {
+    Json(Response {
+        status: Status::Error,
+        msg: Some("Ivalid authorization header"),
         secret: None,
     })
 }
@@ -180,7 +184,7 @@ async fn main() -> Result<(), rocket::Error> {
     let _ = rocket::build()
         .mount("/", rocket::routes![index])
         .manage(Mutex::new(users))
-        .register("/", rocket::catchers![bad_req])
+        .register("/", rocket::catchers![not_found, forbidden])
         .launch()
         .await?;
     Ok(())
